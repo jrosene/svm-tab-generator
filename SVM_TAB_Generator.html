@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SVM TAB Report Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Courier New', monospace; background: #fff; color: #111; font-size: 13px; }
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+/* TOP BAR */
+.topbar { border-bottom: 2px solid #111; padding: 10px 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.topbar h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; }
+.topbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+
+/* MAIN LAYOUT */
+.main { display: flex; flex: 1; overflow: hidden; }
+
+/* LEFT PANEL - steps */
+.left { width: 220px; flex-shrink: 0; border-right: 1px solid #ddd; display: flex; flex-direction: column; overflow-y: auto; }
+.step-item { padding: 10px 14px; border-bottom: 1px solid #eee; cursor: pointer; }
+.step-item:hover { background: #f8f8f8; }
+.step-item.active { background: #111; color: #fff; }
+.step-item.done { color: #555; }
+.step-item.done::before { content: '✓ '; }
+.step-num { font-size: 10px; color: #999; margin-bottom: 2px; }
+.step-item.active .step-num { color: #aaa; }
+.step-label { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; }
+
+/* RIGHT PANEL - content */
+.right { flex: 1; overflow-y: auto; padding: 16px; }
+
+/* PANELS */
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* FORM ELEMENTS */
+.upload-area { border: 1.5px dashed #999; padding: 20px; text-align: center; cursor: pointer; margin-bottom: 12px; }
+.upload-area:hover { border-color: #111; background: #f8f8f8; }
+.upload-area.loaded { border-color: #111; border-style: solid; }
+.upload-area p { font-size: 12px; color: #666; margin: 4px 0; }
+.upload-area .filename { font-weight: 700; color: #111; }
+
+.btn { border: 1.5px solid #111; padding: 7px 16px; font-family: inherit; font-size: 12px; font-weight: 700; background: #fff; cursor: pointer; letter-spacing: 0.05em; text-transform: uppercase; }
+.btn:hover { background: #f0f0f0; }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn.primary { background: #111; color: #fff; }
+.btn.primary:hover { background: #333; }
+.btn.primary:disabled { background: #999; }
+.btn.sm { padding: 4px 10px; font-size: 11px; }
+
+.label { font-size: 10px; color: #999; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 4px; }
+.input { border: none; border-bottom: 1px solid #999; padding: 4px 0; font-family: inherit; font-size: 13px; width: 100%; background: transparent; outline: none; }
+.input:focus { border-bottom-color: #111; }
+
+.section-title { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #eee; }
+.status-msg { font-size: 11px; color: #666; margin: 8px 0; min-height: 16px; }
+.status-msg.error { color: #c00; }
+.status-msg.ok { color: #080; }
+
+/* UNIT LIST */
+.unit-list { border: 1px solid #ddd; }
+.unit-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+.unit-row:last-child { border-bottom: none; }
+.unit-row:hover { background: #f8f8f8; }
+.unit-row.selected { background: #111; color: #fff; }
+.unit-tag { font-weight: 700; font-size: 13px; width: 80px; flex-shrink: 0; }
+.unit-type { font-size: 11px; color: #999; width: 100px; flex-shrink: 0; }
+.unit-row.selected .unit-type { color: #aaa; }
+.unit-status { font-size: 10px; margin-left: auto; }
+.unit-status.pending { color: #999; }
+.unit-status.partial { color: #888; font-weight: 700; }
+.unit-status.complete { color: #080; font-weight: 700; }
+.unit-row.selected .unit-status { color: #ccc; }
+
+/* FIELD CAPTURE */
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.field-section { border: 1px solid #ddd; padding: 12px; }
+.field-section-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #999; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #eee; }
+.photo-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.photo-btn { border: 1px solid #999; padding: 3px 8px; font-family: inherit; font-size: 11px; background: #fff; cursor: pointer; }
+.photo-btn:hover { background: #f0f0f0; }
+.photo-btn.loaded { background: #111; color: #fff; border-color: #111; }
+.thumb { width: 28px; height: 28px; object-fit: cover; border: 1px solid #ccc; display: none; cursor: pointer; }
+.thumb.show { display: block; }
+.read-btn { border: 1px solid #999; padding: 3px 8px; font-family: inherit; font-size: 11px; background: #fff; cursor: pointer; }
+.read-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.read-btn.done { color: #080; border-color: #080; }
+
+.field-row { margin-bottom: 8px; }
+.field-key { font-size: 10px; color: #999; margin-bottom: 2px; }
+.field-inp { border: none; border-bottom: 1px solid #ddd; padding: 2px 0; font-family: inherit; font-size: 12px; font-weight: 700; width: 100%; background: transparent; outline: none; }
+.field-inp:focus { border-bottom-color: #111; }
+.field-inp::placeholder { font-weight: 400; color: #ccc; }
+
+/* LOG */
+.log { border: 1px solid #ddd; background: #f8f8f8; padding: 10px; font-size: 11px; color: #555; max-height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; }
+.log-line { margin-bottom: 2px; }
+.log-line.ok { color: #080; }
+.log-line.err { color: #c00; }
+.log-line.info { color: #555; }
+
+/* PROGRESS */
+.progress-bar { height: 4px; background: #eee; margin: 8px 0; }
+.progress-fill { height: 4px; background: #111; transition: width 0.3s; }
+
+@media (max-width: 700px) {
+  .left { display: none; }
+  .three-col { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <h1>SVM TAB Report Generator</h1>
+  <div class="topbar-right">
+    <span id="project-name-display" style="font-size:11px;color:#666;"></span>
+    <button class="btn sm" id="btn-download" onclick="downloadReport()" disabled>Download Report</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT NAV -->
+  <div class="left">
+    <div class="step-item active" id="nav-0" onclick="showPanel(0)">
+      <div class="step-num">STEP 1</div>
+      <div class="step-label">Upload Files</div>
+    </div>
+    <div class="step-item" id="nav-1" onclick="showPanel(1)">
+      <div class="step-num">STEP 2</div>
+      <div class="step-label">Project Info</div>
+    </div>
+    <div class="step-item" id="nav-2" onclick="showPanel(2)">
+      <div class="step-num">STEP 3</div>
+      <div class="step-label">Parse Schedule</div>
+    </div>
+    <div class="step-item" id="nav-3" onclick="showPanel(3)">
+      <div class="step-num">STEP 4</div>
+      <div class="step-label">Build Report</div>
+    </div>
+    <div class="step-item" id="nav-4" onclick="showPanel(4)">
+      <div class="step-num">STEP 5</div>
+      <div class="step-label">Field Data</div>
+    </div>
+  </div>
+
+  <!-- RIGHT CONTENT -->
+  <div class="right">
+
+    <!-- PANEL 0: Upload -->
+    <div class="panel active" id="panel-0">
+      <div class="section-title">Upload files</div>
+
+      <div class="upload-area" id="drop-template" onclick="document.getElementById('file-template').click()">
+        <p>SVM Template (.xlsm or .xlsx)</p>
+        <p class="filename" id="template-name">No file selected</p>
+        <input type="file" id="file-template" accept=".xlsx,.xlsm" style="display:none" onchange="loadTemplate(this)">
+      </div>
+
+      <div class="upload-area" id="drop-schedule" onclick="document.getElementById('file-schedule').click()">
+        <p>Equipment Schedule (PDF or image)</p>
+        <p class="filename" id="schedule-name">No file selected</p>
+        <input type="file" id="file-schedule" accept=".pdf,.png,.jpg,.jpeg" style="display:none" onchange="loadSchedule(this)">
+      </div>
+
+      <div class="status-msg" id="status-upload"></div>
+      <button class="btn primary" id="btn-next-0" onclick="showPanel(1)" disabled>Next — Project Info</button>
+    </div>
+
+    <!-- PANEL 1: Project Info -->
+    <div class="panel" id="panel-1">
+      <div class="section-title">Project information</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+        <div>
+          <div class="label">Project Name</div>
+          <input class="input" id="proj-name" placeholder="e.g. Figure AI - Fleet Ops">
+        </div>
+        <div>
+          <div class="label">Project Number</div>
+          <input class="input" id="proj-number" placeholder="e.g. 25113">
+        </div>
+        <div>
+          <div class="label">Address</div>
+          <input class="input" id="proj-address" placeholder="e.g. 3950 N First Street, San Jose, CA">
+        </div>
+        <div>
+          <div class="label">Date</div>
+          <input class="input" id="proj-date" placeholder="e.g. 08/18/2025">
+        </div>
+        <div>
+          <div class="label">Technician</div>
+          <input class="input" id="proj-tech" placeholder="Tech initials or name">
+        </div>
+        <div>
+          <div class="label">Engineer</div>
+          <input class="input" id="proj-engineer" placeholder="e.g. David Heckle">
+        </div>
+      </div>
+      <button class="btn" onclick="showPanel(0)" style="margin-right:8px;">Back</button>
+      <button class="btn primary" onclick="showPanel(2)">Next — Parse Schedule</button>
+    </div>
+
+    <!-- PANEL 2: Parse Schedule -->
+    <div class="panel" id="panel-2">
+      <div class="section-title">Parse equipment schedule</div>
+      <p style="font-size:12px;color:#666;margin-bottom:12px;">Claude will read the schedule and extract all equipment into a structured list using HVAC Schedule Parser rules.</p>
+      <button class="btn primary" id="btn-parse" onclick="parseSchedule()">Parse Schedule</button>
+      <div class="progress-bar" style="margin-top:12px;"><div class="progress-fill" id="parse-progress" style="width:0%"></div></div>
+      <div class="status-msg" id="status-parse"></div>
+      <div class="log" id="parse-log" style="margin-top:10px;display:none;"></div>
+
+      <div id="parsed-preview" style="display:none;margin-top:16px;">
+        <div class="section-title">Parsed equipment</div>
+        <div id="parsed-table"></div>
+        <div style="margin-top:12px;">
+          <button class="btn" onclick="showPanel(1)" style="margin-right:8px;">Back</button>
+          <button class="btn primary" onclick="showPanel(3)">Next — Build Report</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL 3: Build Report -->
+    <div class="panel" id="panel-3">
+      <div class="section-title">Build report</div>
+      <p style="font-size:12px;color:#666;margin-bottom:12px;">Creates unit sheets from the template, writes design data to correct cells using DEV mappings.</p>
+      <button class="btn primary" id="btn-build" onclick="buildReport()">Build Report</button>
+      <div class="progress-bar" style="margin-top:12px;"><div class="progress-fill" id="build-progress" style="width:0%"></div></div>
+      <div class="status-msg" id="status-build"></div>
+      <div class="log" id="build-log" style="margin-top:10px;display:none;"></div>
+
+      <div id="build-complete" style="display:none;margin-top:16px;">
+        <div class="section-title">Report built</div>
+        <div id="build-summary" style="font-size:12px;color:#555;margin-bottom:12px;"></div>
+        <button class="btn" onclick="showPanel(2)" style="margin-right:8px;">Back</button>
+        <button class="btn primary" onclick="showPanel(4)">Next — Field Data</button>
+      </div>
+    </div>
+
+    <!-- PANEL 4: Field Data -->
+    <div class="panel" id="panel-4">
+      <div style="display:flex;gap:16px;height:100%;">
+
+        <!-- Unit list -->
+        <div style="width:220px;flex-shrink:0;">
+          <div class="section-title">Units</div>
+          <div class="unit-list" id="unit-list"></div>
+        </div>
+
+        <!-- Field capture form -->
+        <div style="flex:1;">
+          <div id="field-placeholder" style="color:#999;font-size:12px;padding-top:20px;">Select a unit from the list to enter field data.</div>
+          <div id="field-form" style="display:none;">
+
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <div>
+                <div class="label">Selected unit</div>
+                <div style="font-size:18px;font-weight:700;letter-spacing:0.05em;" id="selected-unit-tag"></div>
+              </div>
+              <div style="font-size:11px;color:#999;" id="selected-unit-type"></div>
+            </div>
+
+            <div class="three-col">
+
+              <!-- Unit data -->
+              <div class="field-section">
+                <div class="field-section-title">Unit data</div>
+                <div class="photo-row">
+                  <button class="photo-btn" id="pb-blue" onclick="document.getElementById('fi-blue').click()">&#128247; Photo</button>
+                  <input type="file" id="fi-blue" accept="image/*" style="display:none" onchange="handleFieldPhoto('blue',this)">
+                  <img id="ft-blue" class="thumb">
+                  <button class="read-btn" id="rb-blue" onclick="readFieldPhoto('blue')" disabled>Read</button>
+                </div>
+                <div class="status-msg" id="fs-blue"></div>
+                <div class="field-row"><div class="field-key">MANUFACTURER</div><input class="field-inp" id="ff-UNIT_MFG" placeholder="e.g. Trane" oninput="fieldManual('UNIT_MFG',this.value)"></div>
+                <div class="field-row"><div class="field-key">MODEL</div><input class="field-inp" id="ff-UNIT_MODEL" placeholder="model number" oninput="fieldManual('UNIT_MODEL',this.value)"></div>
+                <div class="field-row"><div class="field-key">SERIAL</div><input class="field-inp" id="ff-UNIT_SERIAL" placeholder="serial number" oninput="fieldManual('UNIT_SERIAL',this.value)"></div>
+                <div class="field-row"><div class="field-key">TYPE / CAPACITY</div><input class="field-inp" id="ff-UNIT_TYPE" placeholder="e.g. RTU / 72,000 BTU" oninput="fieldManual('UNIT_TYPE',this.value)"></div>
+                <div class="field-row"><div class="field-key">ELECTRICAL</div><input class="field-inp" id="ff-UNIT_ELEC" placeholder="e.g. 208 / 3 / 60" oninput="fieldManual('UNIT_ELEC',this.value)"></div>
+              </div>
+
+              <!-- Motor data -->
+              <div class="field-section">
+                <div class="field-section-title">Motor data</div>
+                <div class="photo-row">
+                  <button class="photo-btn" id="pb-yellow" onclick="document.getElementById('fi-yellow').click()">&#128247; Photo</button>
+                  <input type="file" id="fi-yellow" accept="image/*" style="display:none" onchange="handleFieldPhoto('yellow',this)">
+                  <img id="ft-yellow" class="thumb">
+                  <button class="read-btn" id="rb-yellow" onclick="readFieldPhoto('yellow')" disabled>Read</button>
+                  <select id="volt-sel" style="border:1px solid #ddd;padding:2px 4px;font-family:inherit;font-size:11px;background:#fff;">
+                    <option value="auto">V:auto</option>
+                    <option value="208">208V</option>
+                    <option value="230">230V</option>
+                    <option value="460">460V</option>
+                    <option value="480">480V</option>
+                  </select>
+                </div>
+                <div class="status-msg" id="fs-yellow"></div>
+                <div class="field-row"><div class="field-key">MFG / FRAME</div><input class="field-inp" id="ff-MOTOR_MFG_FRAME" placeholder="e.g. Baldor / 215JM" oninput="fieldManual('MOTOR_MFG_FRAME',this.value)"></div>
+                <div class="field-row"><div class="field-key">HP</div><input class="field-inp" id="ff-MOTOR_HP" placeholder="e.g. 10" oninput="fieldManual('MOTOR_HP',this.value)"></div>
+                <div class="field-row"><div class="field-key">RPM / Hz</div><input class="field-inp" id="ff-MOTOR_RPM_HZ" placeholder="e.g. 3490 / 60" oninput="fieldManual('MOTOR_RPM_HZ',this.value)"></div>
+                <div class="field-row"><div class="field-key">VOLTAGE / PHASE</div><input class="field-inp" id="ff-MOTOR_VOLT_PHASE" placeholder="e.g. 460 / 3" oninput="fieldManual('MOTOR_VOLT_PHASE',this.value)"></div>
+                <div class="field-row"><div class="field-key">AMPS / SF</div><input class="field-inp" id="ff-MOTOR_AMPS_SF" placeholder="e.g. 11.8 / 1.15" oninput="fieldManual('MOTOR_AMPS_SF',this.value)"></div>
+                <div class="field-row"><div class="field-key">HP / RPM (pump)</div><input class="field-inp" id="ff-MOTOR_HP_RPM" placeholder="e.g. 10 / 3490" oninput="fieldManual('MOTOR_HP_RPM',this.value)"></div>
+              </div>
+
+              <!-- Belt / Sheave -->
+              <div class="field-section">
+                <div class="field-section-title">Belt / Sheave</div>
+                <div class="photo-row">
+                  <button class="photo-btn" id="pb-orange" onclick="document.getElementById('fi-orange').click()">&#128247; Photo</button>
+                  <input type="file" id="fi-orange" accept="image/*" style="display:none" onchange="handleFieldPhoto('orange',this)">
+                  <img id="ft-orange" class="thumb">
+                  <button class="read-btn" id="rb-orange" onclick="readFieldPhoto('orange')" disabled>Read</button>
+                </div>
+                <div class="status-msg" id="fs-orange"></div>
+                <div class="field-row"><div class="field-key">NO. BELTS / SIZE (e.g. 2 / B63)</div><input class="field-inp" id="ff-BELT_COMBINED" placeholder="2 / B63" oninput="parseBelt(this.value)"></div>
+                <div style="display:flex;gap:8px;">
+                  <div class="field-row" style="flex:1;"><div class="field-key">QTY</div><input class="field-inp" id="ff-BELT_QTY" placeholder="2" oninput="fieldManual('BELT_QTY',this.value)"></div>
+                  <div class="field-row" style="flex:2;"><div class="field-key">SIZE</div><input class="field-inp" id="ff-BELT_SIZE" placeholder="B63" oninput="fieldManual('BELT_SIZE',this.value)"></div>
+                </div>
+                <div class="field-row"><div class="field-key">MOTOR SHEAVE x BORE</div><input class="field-inp" id="ff-MOTOR_SHEAVE" placeholder="4.5 x 1.125" oninput="fieldManual('MOTOR_SHEAVE',this.value)"></div>
+                <div class="field-row"><div class="field-key">FAN SHEAVE x BORE</div><input class="field-inp" id="ff-FAN_SHEAVE" placeholder="12 x 1.375" oninput="fieldManual('FAN_SHEAVE',this.value)"></div>
+                <div class="field-row"><div class="field-key">SHEAVE CL DISTANCE</div><input class="field-inp" id="ff-SHEAVE_CL" placeholder='24"' oninput="fieldManual('SHEAVE_CL',this.value)"></div>
+              </div>
+
+            </div>
+
+            <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+              <button class="btn primary" onclick="saveFieldData()">Save to Report</button>
+              <button class="btn sm" onclick="clearFieldForm()">Clear</button>
+              <span class="status-msg" id="fs-save" style="margin:0;"></span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end .right -->
+</div><!-- end .main -->
+</div><!-- end .app -->
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let templateWB = null;       // parsed workbook object
+let templateArrayBuffer = null;
+let scheduleImageB64 = null;
+let scheduleImageType = null;
+let parsedRows = [];         // parsed CSV rows from schedule
+let reportWB = null;         // working workbook being built
+let unitManifest = [];       // {tag, formatType, status, fieldData}
+let selectedUnitIdx = -1;
+let fieldImages = { blue: null, yellow: null, orange: null };
+let fieldImgTypes = { blue: null, yellow: null, orange: null };
+let currentFieldData = {};
+
+// DEV mappings baked in (from SVM_Template DEV_Destination_Cells)
+const DEV = {
+  AAR1: [
+    { field:'TAG',          cells:'C8,E8',          role:'SHEET_NAME_KEY' },
+    { field:'TAG',          cells:'B6',             role:'TAG_LIST_CELL' },
+    { field:'AREA SERVED',  cells:'C10,E10',        role:'WRITE' },
+    { field:'MANUFACTURER', cells:'C11,E11',        role:'WRITE' },
+    { field:'MODEL',        cells:'C12,E12',        role:'WRITE' },
+    { field:'CFM',          cells:'C15,E15',        role:'WRITE' },
+    { field:'OSA',          cells:'C17,E17',        role:'WRITE' },
+    { field:'TSP',          cells:'C19,E19',        role:'WRITE', merge:'STATIC', order:1, delim:'/' },
+    { field:'ESP',          cells:'C19,E19',        role:'WRITE', merge:'STATIC', order:2, delim:'/' },
+    { field:'FAN RPM',      cells:'C18,E18',        role:'WRITE' },
+    { field:'VOLTAGE',      cells:'C28,E28',        role:'WRITE', merge:'ELEC', order:1, delim:'/' },
+    { field:'PHASE',        cells:'C28,E28',        role:'WRITE', merge:'ELEC', order:2, delim:'/' },
+    { field:'AMPS',         cells:'C29,E29',        role:'WRITE' },
+    { field:'LOCATION',     cells:'C9',             role:'WRITE' },
+    // FIELD_WRITE
+    { field:'MOTOR_MFG_FRAME',  cells:'C25,E25',   role:'FIELD_WRITE' },
+    { field:'MOTOR_HP',         cells:'C26,E26',   role:'FIELD_WRITE' },
+    { field:'MOTOR_RPM_HZ',     cells:'C27,E27',   role:'FIELD_WRITE' },
+    { field:'MOTOR_VOLT_PHASE', cells:'C28,E28',   role:'FIELD_WRITE' },
+    { field:'MOTOR_AMPS_SF',    cells:'C29,E29',   role:'FIELD_WRITE' },
+    { field:'MOTOR_SHEAVE',     cells:'C30,E30',   role:'FIELD_WRITE' },
+    { field:'FAN_SHEAVE',       cells:'C31,E31',   role:'FIELD_WRITE' },
+    { field:'BELT_SIZE',        cells:'C32,E32',   role:'FIELD_WRITE' },
+  ],
+  AAR7: [
+    { field:'TAG',          cells:'C8,F8,I8',       role:'SHEET_NAME_KEY' },
+    { field:'TAG',          cells:'B6',             role:'TAG_LIST_CELL' },
+    { field:'AREA SERVED',  cells:'C10,F10,I10',    role:'WRITE' },
+    { field:'MANUFACTURER', cells:'C11,F11,I11',    role:'WRITE' },
+    { field:'MODEL',        cells:'C12,F12,I12',    role:'WRITE' },
+    { field:'CFM',          cells:'C25,F25,I25',    role:'WRITE' },
+    { field:'ESP',          cells:'C28,F28,I28',    role:'WRITE' },
+    { field:'FAN RPM',      cells:'C27,F27,I27',    role:'WRITE' },
+    { field:'VOLTAGE',      cells:'C31,F31,I31',    role:'WRITE' },
+    { field:'PHASE',        cells:'C33,F33,I33',    role:'WRITE' },
+    { field:'AMPS',         cells:'C32,F32,I32',    role:'WRITE' },
+    { field:'LOCATION',     cells:'C9',             role:'WRITE' },
+    { field:'MOTOR_MFG_FRAME',  cells:'C15,F15,I15', role:'FIELD_WRITE' },
+    { field:'MOTOR_HP',         cells:'C16,F16,I16', role:'FIELD_WRITE' },
+    { field:'MOTOR_RPM',        cells:'C17,F17,I17', role:'FIELD_WRITE' },
+    { field:'MOTOR_VOLT_PHASE', cells:'C18,F18,I18', role:'FIELD_WRITE' },
+    { field:'MOTOR_AMPS_SF',    cells:'C19,F19,I19', role:'FIELD_WRITE' },
+    { field:'MOTOR_SHEAVE',     cells:'C20,F20,I20', role:'FIELD_WRITE' },
+    { field:'FAN_SHEAVE',       cells:'C21,F21,I21', role:'FIELD_WRITE' },
+    { field:'BELT_SIZE',        cells:'C22,F22,I22', role:'FIELD_WRITE' },
+  ],
+  AC_AHU: [
+    { field:'TAG',          cells:'C6',             role:'SHEET_NAME_KEY' },
+    { field:'AREA SERVED',  cells:'D10',            role:'WRITE' },
+    { field:'MANUFACTURER', cells:'D11',            role:'WRITE' },
+    { field:'MODEL',        cells:'D12',            role:'WRITE' },
+    { field:'CFM',          cells:'D23',            role:'WRITE' },
+    { field:'OSA',          cells:'D25',            role:'WRITE' },
+    { field:'ABSOLUTE OSA', cells:'G40',            role:'WRITE' },
+    { field:'TSP',          cells:'D27',            role:'WRITE' },
+    { field:'ESP',          cells:'F27',            role:'WRITE' },
+    { field:'FAN RPM',      cells:'D32',            role:'WRITE' },
+    { field:'VOLTAGE',      cells:'D33',            role:'WRITE' },
+    { field:'AMPS',         cells:'D34',            role:'WRITE' },
+    { field:'LOCATION',     cells:'D9',             role:'WRITE' },
+    { field:'MOTOR_MFG_FRAME',  cells:'L9',         role:'FIELD_WRITE' },
+    { field:'MOTOR_HP',         cells:'L10',        role:'FIELD_WRITE' },
+    { field:'MOTOR_RPM_HZ',     cells:'L11',        role:'FIELD_WRITE' },
+    { field:'MOTOR_VOLT_PHASE', cells:'L12',        role:'FIELD_WRITE' },
+    { field:'MOTOR_AMPS_SF',    cells:'L13',        role:'FIELD_WRITE' },
+    { field:'MOTOR_SHEAVE',     cells:'A17',        role:'FIELD_WRITE' },
+    { field:'FAN_SHEAVE',       cells:'A19',        role:'FIELD_WRITE' },
+    { field:'BELT_SIZE',        cells:'A15',        role:'FIELD_WRITE' },
+  ],
+  'POWERED EXHAUST': [
+    { field:'TAG',          cells:'C6',             role:'SHEET_NAME_KEY' },
+    { field:'AREA SERVED',  cells:'D10',            role:'WRITE' },
+    { field:'MANUFACTURER', cells:'D11',            role:'WRITE' },
+    { field:'MODEL',        cells:'D12',            role:'WRITE' },
+    { field:'CFM',          cells:'D23',            role:'WRITE' },
+    { field:'VOLTAGE',      cells:'D33',            role:'WRITE' },
+    { field:'AMPS',         cells:'D34',            role:'WRITE' },
+    { field:'MOTOR_MFG_FRAME',  cells:'L9',         role:'FIELD_WRITE' },
+    { field:'MOTOR_HP',         cells:'L10',        role:'FIELD_WRITE' },
+    { field:'MOTOR_RPM_HZ',     cells:'L11',        role:'FIELD_WRITE' },
+    { field:'MOTOR_VOLT_PHASE', cells:'L12',        role:'FIELD_WRITE' },
+    { field:'MOTOR_AMPS_SF',    cells:'L13',        role:'FIELD_WRITE' },
+    { field:'MOTOR_SHEAVE',     cells:'A17',        role:'FIELD_WRITE' },
+    { field:'FAN_SHEAVE',       cells:'A19',        role:'FIELD_WRITE' },
+    { field:'BELT_SIZE',        cells:'A15',        role:'FIELD_WRITE' },
+  ],
+  PUMP: [
+    { field:'TAG',          cells:'C9,G9',          role:'SHEET_NAME_KEY' },
+    { field:'TAG',          cells:'B7',             role:'TAG_LIST_CELL' },
+    { field:'LOCATION',     cells:'C10,G10',        role:'WRITE' },
+    { field:'AREA SERVED',  cells:'C11,G11',        role:'WRITE' },
+    { field:'MANUFACTURER', cells:'C12,G12',        role:'WRITE' },
+    { field:'MODEL',        cells:'C13,G13',        role:'WRITE' },
+    { field:'GPM',          cells:'C15,G15',        role:'WRITE', merge:'FLOW', order:1, delim:'/' },
+    { field:'HEAD',         cells:'C15,G15',        role:'WRITE', merge:'FLOW', order:2, delim:'/' },
+    { field:'GPM',          cells:'C19,G19',        role:'WRITE' },
+    { field:'MOTOR_MFG_FRAME',  cells:'C16,G16',   role:'FIELD_WRITE' },
+    { field:'MOTOR_HP_RPM',     cells:'C17,G17',   role:'FIELD_WRITE' },
+    { field:'MOTOR_VOLT_PHASE', cells:'C20,G20',   role:'FIELD_WRITE' },
+    { field:'MOTOR_AMPS_SF',    cells:'C21,G21',   role:'FIELD_WRITE' },
+    { field:'MOTOR_RPM_HZ',     cells:'C22,G22',   role:'FIELD_WRITE' },
+  ],
+  VAV: [
+    { field:'AREA SERVED',  cells:'G11',            role:'WRITE' },
+    { field:'CFM',          cells:'I12',            role:'WRITE' },
+    { field:'MIN CFM',      cells:'G12',            role:'WRITE' },
+    { field:'HEAT CFM',     cells:'H12',            role:'WRITE' },
+    { field:'GPM',          cells:'I14',            role:'WRITE' },
+    { field:'INLET',        cells:'B12',            role:'WRITE' },
+  ],
+};
+
+// Normalize for fuzzy matching
+function norm(s) {
+  return String(s||'').toUpperCase().trim()
+    .replace(/\s+/g,' ')
+    .replace(/[^A-Z0-9 \/]/g,'');
+}
+
+// ============================================================
+// NAV
+// ============================================================
+function showPanel(n) {
+  document.querySelectorAll('.panel').forEach((p,i) => {
+    p.classList.toggle('active', i === n);
+  });
+  document.querySelectorAll('.step-item').forEach((s,i) => {
+    s.classList.toggle('active', i === n);
+  });
+}
+
+// ============================================================
+// STEP 0: FILE LOADING
+// ============================================================
+async function loadTemplate(input) {
+  const file = input.files[0]; if (!file) return;
+  document.getElementById('template-name').textContent = file.name;
+  document.getElementById('drop-template').classList.add('loaded');
+
+  const buf = await file.arrayBuffer();
+  templateArrayBuffer = buf;
+  templateWB = XLSX.read(buf, { type: 'array', bookVBA: true });
+
+  log('upload', `✓ Template loaded: ${file.name} — ${templateWB.SheetNames.length} sheets`, 'ok');
+  checkUploadReady();
+}
+
+async function loadSchedule(input) {
+  const file = input.files[0]; if (!file) return;
+  document.getElementById('schedule-name').textContent = file.name;
+  document.getElementById('drop-schedule').classList.add('loaded');
+
+  if (file.type === 'application/pdf') {
+    // Convert PDF to base64 for Claude
+    const buf = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary = '';
+    bytes.forEach(b => binary += String.fromCharCode(b));
+    scheduleImageB64 = btoa(binary);
+    scheduleImageType = 'application/pdf';
+  } else {
+    const reader = new FileReader();
+    reader.onload = e => {
+      scheduleImageB64 = e.target.result.split(',')[1];
+      scheduleImageType = file.type;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  log('upload', `✓ Schedule loaded: ${file.name}`, 'ok');
+  checkUploadReady();
+}
+
+function checkUploadReady() {
+  const ready = templateWB && scheduleImageB64;
+  document.getElementById('btn-next-0').disabled = !ready;
+  if (ready) document.getElementById('status-upload').textContent = 'Both files loaded. Ready to continue.';
+}
+
+function log(panel, msg, type='info') {
+  const logEl = document.getElementById(panel === 'upload' ? null : panel + '-log');
+  if (!logEl) return;
+  logEl.style.display = 'block';
+  const line = document.createElement('div');
+  line.className = 'log-line ' + type;
+  line.textContent = msg;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ============================================================
+// STEP 2: PARSE SCHEDULE
+// ============================================================
+async function parseSchedule() {
+  document.getElementById('btn-parse').disabled = true;
+  document.getElementById('parse-log').style.display = 'block';
+  document.getElementById('status-parse').textContent = 'Sending schedule to Claude...';
+  setProgress('parse', 10);
+
+  const skillPrompt = `You are an HVAC Schedule Parser. Parse the equipment schedule in this image into a CSV.
+
+CRITICAL RULES:
+1. ONLY use these exact canonical headers — never invent new ones
+2. Drop any schedule column NOT in the canonical whitelist
+3. Fill missing required fields with "DNA"
+4. Normalize all text: trim whitespace, consistent capitalization
+
+EQUIPMENT TYPES AND THEIR CANONICAL HEADERS:
+
+AC_AHU (Air Conditioning / AHU units):
+TAG,DESTINATION,AREA SERVED,MANUFACTURER,MODEL,CFM,OSA,ABSOLUTE OSA,TSP,ESP,FAN RPM,VOLTAGE,AMPS,LOCATION
+DESTINATION value = AC_AHU
+
+AAR7 (Exhaust fans — schedule titled "EXHAUST FAN SCHEDULE" or similar, 3 per sheet):
+TAG,DESTINATION,AREA SERVED,MANUFACTURER,MODEL,CFM,ESP,FAN RPM,VOLTAGE,PHASE,AMPS,LOCATION
+DESTINATION value = AAR7
+
+AAR1 (Fan coil units, 2 per sheet):
+TAG,DESTINATION,AREA SERVED,MANUFACTURER,MODEL,CFM,OSA,TSP,ESP,FAN RPM,VOLTAGE,PHASE,AMPS,LOCATION
+DESTINATION value = AAR1
+
+PUMP (Pumps):
+TAG,DESTINATION,LOCATION,AREA SERVED,MANUFACTURER,MODEL,GPM,HEAD
+DESTINATION value = PUMP
+
+VAV (Variable Air Volume boxes):
+TAG,DESTINATION,AREA SERVED,CFM,MIN CFM,HEAT CFM,GPM,INLET
+DESTINATION value = VAV
+
+POWERED EXHAUST:
+TAG,DESTINATION,AREA SERVED,MANUFACTURER,MODEL,CFM,OSA,ABSOLUTE OSA,TSP,ESP,FAN RPM,VOLTAGE,AMPS
+DESTINATION value = POWERED EXHAUST
+
+FIELD MAPPING RULES:
+- "Design Cooling CFM" or "MAX CFM" or "Unit CFM" → CFM
+- "Space Name" or "Areas Served" or "Zone" → AREA SERVED
+- "ESP IN. WG" or "External Static Pressure" → ESP
+- "V/PH" → split into VOLTAGE and PHASE
+- For AC_AHU units: if schedule has both supply and exhaust columns, route to AC_AHU
+
+Parse ALL equipment schedules visible in the image. Output multiple CSV blocks if multiple schedule types exist.
+For each schedule type, output:
+=== EQUIPMENT_TYPE ===
+CSV data here
+
+Example output format:
+=== AC_AHU ===
+TAG,DESTINATION,AREA SERVED,MANUFACTURER,MODEL,CFM,...
+RTU-2,AC_AHU,TEST SPACE 120,AMERICAN STANDARD,W4S036A4M45B0BL,10000,...
+
+=== AAR7 ===
+TAG,DESTINATION,...
+EF-1,AAR7,...`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: scheduleImageType === 'application/pdf' ? 'document' : 'image',
+              source: {
+                type: 'base64',
+                media_type: scheduleImageType,
+                data: scheduleImageB64
+              }
+            },
+            { type: 'text', text: skillPrompt }
+          ]
+        }]
+      })
+    });
+
+    setProgress('parse', 60);
+    const data = await resp.json();
+    const raw = data.content.map(b => b.text || '').join('');
+
+    log('parse', 'Schedule parsed. Processing rows...', 'info');
+    setProgress('parse', 80);
+
+    parsedRows = parseClaudeCSVOutput(raw);
+    log('parse', `✓ Extracted ${parsedRows.length} equipment rows`, 'ok');
+
+    setProgress('parse', 100);
+    renderParsedPreview();
+    document.getElementById('status-parse').textContent = `✓ Parsed ${parsedRows.length} units`;
+    document.getElementById('parsed-preview').style.display = 'block';
+
+  } catch(e) {
+    document.getElementById('status-parse').textContent = 'Error parsing schedule.';
+    log('parse', 'Error: ' + e.message, 'err');
+  }
+
+  document.getElementById('btn-parse').disabled = false;
+}
+
+function parseClaudeCSVOutput(raw) {
+  const rows = [];
+  // Split by equipment type blocks
+  const blocks = raw.split(/===\s*([A-Z_\s]+)\s*===/);
+
+  let i = 1;
+  while (i < blocks.length) {
+    const equipType = blocks[i].trim();
+    const csvData = blocks[i+1] ? blocks[i+1].trim() : '';
+    i += 2;
+
+    if (!csvData) continue;
+
+    const lines = csvData.split('\n').filter(l => l.trim() && !l.startsWith('```'));
+    if (lines.length < 2) continue;
+
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g,''));
+
+    for (let r = 1; r < lines.length; r++) {
+      const vals = splitCSV(lines[r]);
+      if (!vals.length || !vals[0].trim()) continue;
+
+      const row = {};
+      headers.forEach((h, idx) => {
+        row[h] = (vals[idx] || 'DNA').trim().replace(/"/g,'');
+      });
+
+      if (row.TAG && row.TAG !== 'DNA') {
+        rows.push(row);
+      }
+    }
+  }
+
+  return rows;
+}
+
+function splitCSV(line) {
+  const out = []; let cur = ''; let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQ = !inQ; }
+    else if (ch === ',' && !inQ) { out.push(cur.trim()); cur = ''; }
+    else { cur += ch; }
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+function renderParsedPreview() {
+  const container = document.getElementById('parsed-table');
+  const byType = {};
+  parsedRows.forEach(r => {
+    const t = r.DESTINATION || 'UNKNOWN';
+    if (!byType[t]) byType[t] = [];
+    byType[t].push(r);
+  });
+
+  let html = '';
+  Object.keys(byType).forEach(type => {
+    html += `<div style="margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;margin-bottom:4px;">${type} — ${byType[type].length} unit(s)</div>
+      <div style="border:1px solid #ddd;overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+          <tr style="background:#f5f5f5;">`;
+
+    const keys = Object.keys(byType[type][0]);
+    keys.forEach(k => {
+      html += `<th style="padding:4px 8px;border:1px solid #eee;text-align:left;white-space:nowrap;">${k}</th>`;
+    });
+    html += '</tr>';
+
+    byType[type].forEach(row => {
+      html += '<tr>';
+      keys.forEach(k => {
+        const v = row[k] || '';
+        html += `<td style="padding:4px 8px;border:1px solid #eee;white-space:nowrap;${v==='DNA'?'color:#ccc':''}">${v}</td>`;
+      });
+      html += '</tr>';
+    });
+
+    html += '</table></div></div>';
+  });
+
+  container.innerHTML = html;
+}
+
+function setProgress(panel, pct) {
+  document.getElementById(panel + '-progress').style.width = pct + '%';
+}
+
+// ============================================================
+// STEP 3: BUILD REPORT
+// ============================================================
+async function buildReport() {
+  document.getElementById('btn-build').disabled = true;
+  document.getElementById('build-log').style.display = 'block';
+  setProgress('build', 5);
+
+  // Start from template
+  reportWB = XLSX.read(templateArrayBuffer, { type: 'array', bookVBA: true, cellStyles: true });
+  unitManifest = [];
+
+  // Write project info to Cover Sheet
+  writeProjectInfo();
+  log('build', '✓ Project info written to Cover Sheet', 'ok');
+  setProgress('build', 15);
+
+  // Group rows by DESTINATION
+  const byDest = {};
+  parsedRows.forEach(row => {
+    const dest = norm(row.DESTINATION || '');
+    if (!byDest[dest]) byDest[dest] = [];
+    byDest[dest].push(row);
+  });
+
+  const total = parsedRows.length;
+  let done = 0;
+
+  // Process each type
+  for (const [dest, rows] of Object.entries(byDest)) {
+    const baseSheet = getBaseSheet(dest);
+    if (!baseSheet) {
+      log('build', `⚠ No base sheet for DESTINATION: ${dest}`, 'err');
+      continue;
+    }
+
+    if (!reportWB.SheetNames.includes(baseSheet)) {
+      log('build', `⚠ Base sheet not found in template: ${baseSheet}`, 'err');
+      continue;
+    }
+
+    const devRows = DEV[baseSheet] || DEV[dest] || [];
+    const slotsPerSheet = getSlotsPerSheet(dest);
+
+    // Group into sheets
+    for (let i = 0; i < rows.length; i += slotsPerSheet) {
+      const slotRows = rows.slice(i, i + slotsPerSheet);
+      const sheetName = makeSheetName(slotRows, slotsPerSheet);
+
+      if (reportWB.SheetNames.includes(sheetName)) {
+        log('build', `⚠ Sheet already exists: ${sheetName} — skipping`, 'info');
+        continue;
+      }
+
+      // Copy base sheet
+      const newSheetName = sheetName;
+      copySheet(reportWB, baseSheet, newSheetName);
+
+      // Write data
+      writeDesignData(reportWB, newSheetName, slotRows, devRows, dest);
+
+      // Track in manifest
+      slotRows.forEach((r, idx) => {
+        unitManifest.push({
+          tag: r.TAG,
+          sheetName: newSheetName,
+          formatType: dest,
+          slotIndex: idx,
+          status: 'pending',
+          fieldData: {}
+        });
+      });
+
+      done += slotRows.length;
+      setProgress('build', 15 + Math.round((done / total) * 80));
+      log('build', `✓ Created: ${newSheetName}`, 'ok');
+    }
+  }
+
+  setProgress('build', 100);
+  document.getElementById('status-build').textContent = `✓ Report built — ${unitManifest.length} units across ${reportWB.SheetNames.length} sheets`;
+  document.getElementById('build-complete').style.display = 'block';
+  document.getElementById('btn-download').disabled = false;
+
+  // Build summary
+  const byType = {};
+  unitManifest.forEach(u => {
+    byType[u.formatType] = (byType[u.formatType] || 0) + 1;
+  });
+  let summary = Object.entries(byType).map(([t,n]) => `${t}: ${n} unit(s)`).join(' | ');
+  document.getElementById('build-summary').textContent = summary;
+
+  renderUnitList();
+  document.getElementById('btn-build').disabled = false;
+}
+
+function writeProjectInfo() {
+  const ws = reportWB.Sheets['Cover Sheet'];
+  if (!ws) return;
+  const name = document.getElementById('proj-name').value;
+  const num = document.getElementById('proj-number').value;
+  const addr = document.getElementById('proj-address').value;
+  const date = document.getElementById('proj-date').value;
+  const tech = document.getElementById('proj-tech').value;
+
+  // H15 = project name (from template formula references)
+  if (name) setCellValue(ws, 'H15', name);
+  if (num)  setCellValue(ws, 'H16', num);
+  if (addr) setCellValue(ws, 'H17', addr);
+  if (date) setCellValue(ws, 'H18', date);
+  if (tech) setCellValue(ws, 'H26', tech);
+
+  document.getElementById('project-name-display').textContent = name || '';
+}
+
+function getBaseSheet(dest) {
+  const map = {
+    'AAR1': 'AAR1',
+    'AAR7': 'AAR7',
+    'AC_AHU': 'AC_AHU',
+    'POWERED EXHAUST': 'POWERED EXHAUST',
+    'PUMP': 'PAR1',
+    'VAV': 'VAV',
+  };
+  return map[dest] || null;
+}
+
+function getSlotsPerSheet(dest) {
+  if (dest === 'AAR7') return 3;
+  if (dest === 'AAR1' || dest === 'PUMP') return 2;
+  return 1;
+}
+
+function makeSheetName(rows, slots) {
+  const tags = rows.map(r => r.TAG).filter(Boolean);
+  let name = tags.join(', ');
+  if (name.length > 31) name = name.substring(0, 31);
+  // Make safe
+  name = name.replace(/[:\\/\?\*\[\]]/g, '_');
+  return name;
+}
+
+function copySheet(wb, sourceName, newName) {
+  // SheetJS doesn't have a direct copy — we write the JSON data to a new sheet
+  const sourceWS = wb.Sheets[sourceName];
+  // Deep clone
+  const newWS = JSON.parse(JSON.stringify(sourceWS));
+  XLSX.utils.book_append_sheet(wb, newWS, newName);
+}
+
+function writeDesignData(wb, sheetName, slotRows, devRows, dest) {
+  const ws = wb.Sheets[sheetName];
+  if (!ws) return;
+
+  // Handle merge groups
+  const mergeGroups = {};
+
+  devRows.filter(d => d.role === 'WRITE' || d.role === 'SHEET_NAME_KEY' || d.role === 'TAG_LIST_CELL').forEach(devRow => {
+    const fieldNorm = norm(devRow.field);
+    const cells = devRow.cells.split(',').map(c => c.trim());
+
+    if (devRow.role === 'SHEET_NAME_KEY') {
+      // Write tags to each slot cell
+      cells.forEach((cell, idx) => {
+        const row = slotRows[idx];
+        if (row) setCellValue(ws, cell, row.TAG || '');
+      });
+      return;
+    }
+
+    if (devRow.role === 'TAG_LIST_CELL') {
+      const tags = slotRows.map(r => r.TAG).filter(Boolean).join(', ');
+      setCellValue(ws, cells[0], tags);
+      return;
+    }
+
+    if (devRow.merge) {
+      // Collect merge values
+      if (!mergeGroups[devRow.merge]) mergeGroups[devRow.merge] = {};
+      slotRows.forEach((row, idx) => {
+        const val = getRowField(row, devRow.field);
+        if (!mergeGroups[devRow.merge][idx]) mergeGroups[devRow.merge][idx] = {};
+        mergeGroups[devRow.merge][idx][devRow.order] = val;
+        mergeGroups[devRow.merge]._cells = cells;
+        mergeGroups[devRow.merge]._delim = devRow.delim || '/';
+      });
+      return;
+    }
+
+    // Normal WRITE — one value per slot
+    cells.forEach((cell, idx) => {
+      const row = slotRows[idx];
+      if (!row) return;
+      const val = getRowField(row, devRow.field);
+      if (val && val !== 'DNA') setCellValue(ws, cell, val);
+      else setCellValue(ws, cell, 'DNA');
+    });
+  });
+
+  // Write merge groups
+  Object.entries(mergeGroups).forEach(([grp, data]) => {
+    const cells = data._cells;
+    const delim = data._delim;
+    cells.forEach((cell, idx) => {
+      const vals = data[idx];
+      if (!vals) return;
+      const parts = Object.keys(vals).sort().map(k => vals[k] || 'DNA');
+      const combined = parts.join(' ' + delim + ' ');
+      setCellValue(ws, cell, combined);
+    });
+  });
+
+  // OSA mirror rule for AAR1
+  if (dest === 'AAR1') {
+    ['C', 'E'].forEach((col, idx) => {
+      const osaCell = ws[col + '17'];
+      if (!osaCell || !osaCell.v || norm(String(osaCell.v)) === 'DNA') {
+        const cfmCell = ws[col + '15'];
+        if (cfmCell) setCellValue(ws, col + '16', cfmCell.v);
+      }
+    });
+  }
+}
+
+function getRowField(row, fieldName) {
+  const fn = norm(fieldName);
+  for (const key of Object.keys(row)) {
+    if (norm(key) === fn) return row[key];
+  }
+  return 'DNA';
+}
+
+function setCellValue(ws, cellRef, value) {
+  if (!ws[cellRef]) ws[cellRef] = {};
+  ws[cellRef].v = value;
+  ws[cellRef].t = typeof value === 'number' ? 'n' : 's';
+  ws[cellRef].w = String(value);
+}
+
+// ============================================================
+// STEP 4: FIELD DATA
+// ============================================================
+function renderUnitList() {
+  const container = document.getElementById('unit-list');
+  container.innerHTML = '';
+
+  unitManifest.forEach((unit, idx) => {
+    const div = document.createElement('div');
+    div.className = 'unit-row' + (idx === selectedUnitIdx ? ' selected' : '');
+    div.onclick = () => selectUnit(idx);
+
+    const hasFieldData = Object.keys(unit.fieldData).length > 0;
+    const statusClass = hasFieldData ? 'complete' : 'pending';
+    const statusText = hasFieldData ? '✓ data entered' : 'pending';
+
+    div.innerHTML = `
+      <span class="unit-tag">${unit.tag}</span>
+      <span class="unit-type">${unit.formatType}</span>
+      <span class="unit-status ${statusClass}">${statusText}</span>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function selectUnit(idx) {
+  selectedUnitIdx = idx;
+  const unit = unitManifest[idx];
+
+  // Update list highlight
+  renderUnitList();
+
+  // Show form
+  document.getElementById('field-placeholder').style.display = 'none';
+  document.getElementById('field-form').style.display = 'block';
+  document.getElementById('selected-unit-tag').textContent = unit.tag;
+  document.getElementById('selected-unit-type').textContent = unit.formatType;
+
+  // Clear form
+  clearFieldForm();
+
+  // Pre-fill any existing field data
+  const fd = unit.fieldData;
+  Object.keys(fd).forEach(key => {
+    const inp = document.getElementById('ff-' + key);
+    if (inp) inp.value = fd[key];
+  });
+
+  currentFieldData = { ...fd };
+
+  // Reset photos
+  ['blue','yellow','orange'].forEach(s => {
+    fieldImages[s] = null;
+    fieldImgTypes[s] = null;
+    document.getElementById('ft-' + s).classList.remove('show');
+    document.getElementById('pb-' + s).classList.remove('loaded');
+    document.getElementById('rb-' + s).disabled = true;
+    document.getElementById('rb-' + s).classList.remove('done');
+    document.getElementById('fs-' + s).textContent = '';
+  });
+}
+
+function clearFieldForm() {
+  currentFieldData = {};
+  document.querySelectorAll('.field-inp').forEach(inp => inp.value = '');
+  document.getElementById('fs-save').textContent = '';
+}
+
+function fieldManual(key, val) {
+  currentFieldData[key] = val.trim();
+}
+
+function parseBelt(val) {
+  val = val.trim();
+  const parts = val.split(/\s*[\/x]\s*/);
+  if (parts.length >= 2 && !isNaN(parts[0])) {
+    currentFieldData.BELT_QTY = parts[0].trim();
+    currentFieldData.BELT_SIZE = parts[1].trim();
+    document.getElementById('ff-BELT_QTY').value = parts[0].trim();
+    document.getElementById('ff-BELT_SIZE').value = parts[1].trim();
+  } else {
+    currentFieldData.BELT_SIZE = val;
+    document.getElementById('ff-BELT_SIZE').value = val;
+  }
+}
+
+function handleFieldPhoto(section, input) {
+  const file = input.files[0]; if (!file) return;
+  fieldImgTypes[section] = file.type;
+  const r = new FileReader();
+  r.onload = e => {
+    fieldImages[section] = e.target.result.split(',')[1];
+    const thumb = document.getElementById('ft-' + section);
+    thumb.src = e.target.result;
+    thumb.classList.add('show');
+    document.getElementById('pb-' + section).classList.add('loaded');
+    document.getElementById('rb-' + section).disabled = false;
+  };
+  r.readAsDataURL(file);
+}
+
+async function readFieldPhoto(section) {
+  const btn = document.getElementById('rb-' + section);
+  const status = document.getElementById('fs-' + section);
+  btn.disabled = true; status.textContent = 'reading...';
+
+  const vc = document.getElementById('volt-sel').value;
+  const vi = vc === 'auto'
+    ? 'If multiple voltages (e.g. 230/460), use the HIGHER and its corresponding amperage.'
+    : `Project voltage is ${vc}V. Use closest match.`;
+
+  const prompts = {
+    blue: `Extract unit nameplate data. Return ONLY JSON no markdown:\n{"UNIT_MFG":"","UNIT_MODEL":"","UNIT_SERIAL":"","UNIT_TYPE":"","UNIT_ELEC":""}\nUse "N/A" for missing.`,
+    yellow: `Extract motor nameplate data. ${vi}\nReturn ONLY JSON no markdown:\n{"MOTOR_MFG_FRAME":"mfg/frame","MOTOR_HP":"hp","MOTOR_RPM":"rpm","MOTOR_RPM_HZ":"rpm/hz","MOTOR_HP_RPM":"hp/rpm","MOTOR_VOLT_PHASE":"voltage/phase","MOTOR_AMPS_SF":"amps/SF"}\nUse "N/A" for missing.`,
+    orange: `Read belt designation. Return ONLY JSON:\n{"BELT_SIZE":"exact designation","BELT_QTY":"count"}\nUse "N/A" if unreadable.`
+  };
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 500,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: fieldImgTypes[section], data: fieldImages[section] } },
+          { type: 'text', text: prompts[section] }
+        ]}]})
+    });
+    const data = await resp.json();
+    const raw = data.content.map(b => b.text || '').join('');
+    const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
+
+    Object.entries(parsed).forEach(([key, val]) => {
+      if (val && val !== 'N/A') {
+        currentFieldData[key] = val;
+        const inp = document.getElementById('ff-' + key);
+        if (inp) inp.value = val;
+      }
+    });
+
+    if (section === 'orange' && currentFieldData.BELT_QTY && currentFieldData.BELT_SIZE) {
+      document.getElementById('ff-BELT_COMBINED').value =
+        currentFieldData.BELT_QTY + ' / ' + currentFieldData.BELT_SIZE;
+    }
+
+    status.textContent = '✓';
+    btn.classList.add('done');
+  } catch(e) {
+    status.textContent = 'error — check photo';
+  }
+  btn.disabled = false;
+}
+
+function saveFieldData() {
+  if (selectedUnitIdx < 0) return;
+  const unit = unitManifest[selectedUnitIdx];
+
+  // Merge currentFieldData into unit.fieldData
+  Object.assign(unit.fieldData, currentFieldData);
+  unit.status = 'partial';
+
+  // Write field data to reportWB
+  const ws = reportWB.Sheets[unit.sheetName];
+  if (!ws) { document.getElementById('fs-save').textContent = 'Sheet not found.'; return; }
+
+  const devKey = unit.formatType === 'PUMP' ? 'PUMP' :
+                 unit.formatType === 'POWERED EXHAUST' ? 'POWERED EXHAUST' :
+                 unit.formatType;
+  const devRows = DEV[devKey] || [];
+
+  // Determine slot offset
+  const sameSheet = unitManifest.filter(u => u.sheetName === unit.sheetName);
+  const slotOffset = sameSheet.findIndex(u => u.tag === unit.tag);
+
+  devRows.filter(d => d.role === 'FIELD_WRITE').forEach(devRow => {
+    let val = currentFieldData[devRow.field];
+
+    // Belt combined
+    if (devRow.field === 'BELT_SIZE') {
+      const qty = currentFieldData.BELT_QTY;
+      const size = currentFieldData.BELT_SIZE;
+      if (qty && size && qty !== 'DNA' && size !== 'DNA') val = qty + ' x ' + size;
+      else val = size;
+    }
+
+    if (!val || val === 'DNA' || val === 'N/A') return;
+
+    const cells = devRow.cells.split(',').map(c => c.trim());
+    const targetCell = cells[slotOffset] || cells[0];
+    if (targetCell) setCellValue(ws, targetCell, val);
+  });
+
+  unit.status = 'complete';
+  document.getElementById('fs-save').textContent = '✓ Saved to report';
+  renderUnitList();
+  setTimeout(() => document.getElementById('fs-save').textContent = '', 2000);
+}
+
+// ============================================================
+// DOWNLOAD
+// ============================================================
+function downloadReport() {
+  if (!reportWB) return;
+  const projName = document.getElementById('proj-name').value || 'TAB_Report';
+  const filename = projName.replace(/[^a-zA-Z0-9\s\-_]/g,'').trim() + '.xlsx';
+  XLSX.writeFile(reportWB, filename);
+}
+</script>
+</body>
+</html>
